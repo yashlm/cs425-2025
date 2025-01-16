@@ -59,19 +59,22 @@ int main() {
     char buffer[BUFFER_SIZE];
 
     memset(buffer, 0, BUFFER_SIZE);
-    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    recv(client_socket, buffer, BUFFER_SIZE, 0); // Receive the message "Enter the user name" for the server
+    // You should have a line like this in the server.cpp code: send_message(client_socket, "Enter username: ");
+ 
     std::cout << buffer;
     std::getline(std::cin, username);
     send(client_socket, username.c_str(), username.size(), 0);
 
     memset(buffer, 0, BUFFER_SIZE);
-    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    recv(client_socket, buffer, BUFFER_SIZE, 0); // Receive the message "Enter the password" for the server
     std::cout << buffer;
     std::getline(std::cin, password);
     send(client_socket, password.c_str(), password.size(), 0);
 
     memset(buffer, 0, BUFFER_SIZE);
-    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    // Depending on whether the authentication passes or not, receive the message "Authentication Failed" or "Welcome to the server"
+    recv(client_socket, buffer, BUFFER_SIZE, 0); 
     std::cout << buffer << std::endl;
 
     if (std::string(buffer).find("Authentication failed") != std::string::npos) {
@@ -81,6 +84,7 @@ int main() {
 
     // Start thread for receiving messages from server
     std::thread receive_thread(handle_server_messages, client_socket);
+    // We use detach because we want this thread to run in the background while the main thread continues running
     receive_thread.detach();
 
     // Send messages to the server
