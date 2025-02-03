@@ -54,29 +54,40 @@ void handle_client(int client_socket) {
     memset(buffer, 0, sizeof(buffer));
     recv(client_socket, buffer, sizeof(buffer), 0);
     username = buffer;
-    username = username.substr(0, username.find('\0')); // Clean up the username
+    username = username.substr(0, username.find_first_of("\r\n\0")); // Clean up the username
 
     send_message(client_socket, "Enter password: ");
     memset(buffer, 0, sizeof(buffer));
     recv(client_socket, buffer, sizeof(buffer), 0);
     std::string password = buffer;
-    password = password.substr(0, password.find('\0')); // Clean up the password
+    password = password.substr(0, password.find_first_of("\r\n\0")); // Clean up the password
 
     // Authenticate the user
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    if (users.find(username) != users.end() && users[username] == password) {
-        send_message(client_socket, "Welcome to the chat server!\n");
-        clients[client_socket] = username; // Store the client's socket and username
+    bool authenticated = false;
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex);
+        if (users.find(username) != users.end() && users[username] == password) {
+            authenticated = true;
+            send_message(client_socket, "Welcome to the chat server!\n");
+            clients[client_socket] = username; // Store the client's socket and username
 
-        // Notify all other clients that a new client has joined
-        for (auto& [socket, user] : clients) {
-            if (socket != client_socket) { // Don't send to the client themselves
-                std::string join_message = username + " has joined the chat\n";
-                send_message(socket, join_message);
+            // Notify all other clients that a new client has joined
+            for (const auto& [socket, user] : clients) {
+                if (socket != client_socket) { // Don't send to the client themselves
+                    std::string join_message = username + " has joined the chat\n";
+                    send_message(socket, join_message);
+                }
             }
+            std::cout << "User " << username << " authenticated successfully.\n";
+        } else {
+            send_message(client_socket, "Authentication failed.\n");
+            std::cout << "Authentication failed for user " << username << "\n";
+            close(client_socket);
+            return;
         }
-    } else {
-        send_message(client_socket, "Authentication failed.\n");
+    }
+
+    if (!authenticated) {
         close(client_socket);
         return;
     }
@@ -217,7 +228,7 @@ int main() {
 
     sockaddr_in server_address {};
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(12345);
+    server_address.sin_port = htons(1234);
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_socket, (sockaddr*)&server_address, sizeof(server_address)) < 0) {
@@ -230,7 +241,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "Server listening on port 12345...\n";
+    std::cout << "Server listening on port 1234...\n";
 
     // Accept and handle clients in separate threads
     while (true) {
@@ -242,9 +253,8 @@ int main() {
             continue;
         }
 
-        std::cout << "Client connected.\n";
-
         std::thread client_thread(handle_client, client_socket);
+        std::cout << "New connection accepted. Waiting for authentication...\n";
         client_thread.detach();  // Detach thread to handle multiple clients
     }
 
