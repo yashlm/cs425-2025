@@ -140,42 +140,77 @@ void handle_client(int client_socket) {
         } 
         // Handle /create_group command
         else if (message.starts_with("/create_group")) {
-            size_t space = message.find(' ', 14);
+            size_t space = message.find(' ');
             if (space != std::string::npos) {
-                std::string group_name = message.substr(14);
+                std::string group_name = message.substr(space + 1);
+                group_name = group_name.substr(0, group_name.find_first_of("\r\n\0")); // Clean up group name
                 std::lock_guard<std::mutex> lock(groups_mutex);
-                groups[group_name] = {client_socket}; // Add the creator to the group
-                send_message(client_socket, "Group " + group_name + " created.\n");
+                if (groups.find(group_name) != groups.end()) {
+                    send_message(client_socket, "Group " + group_name + " already exists.\n");
+                } else {
+                    groups[group_name] = {client_socket}; // Add the creator to the group
+                    send_message(client_socket, "Group " + group_name + " created.\n");
+                }
+            } else {
+                send_message(client_socket, "Invalid syntax. Use: /create_group <group_name>\n");
             }
-        } 
+        }
         // Handle /join_group command
         else if (message.starts_with("/join_group")) {
-            size_t space = message.find(' ', 12);
+            size_t space = message.find(' ');
             if (space != std::string::npos) {
-                std::string group_name = message.substr(12);
+                std::string group_name = message.substr(space + 1);
+                group_name = group_name.substr(0, group_name.find_first_of("\r\n\0")); // Clean up group name
                 std::lock_guard<std::mutex> lock(groups_mutex);
                 if (groups.find(group_name) != groups.end()) {
-                    groups[group_name].insert(client_socket); // Add client to group
-                    send_message(client_socket, "You joined the group " + group_name + ".\n");
+                    if (groups[group_name].find(client_socket) != groups[group_name].end()) {
+                        send_message(client_socket, "You are already in group " + group_name + ".\n");
+                    } else {
+                        groups[group_name].insert(client_socket); // Add client to group
+                        send_message(client_socket, "You joined the group " + group_name + ".\n");
+                        // Notify other group members
+                        for (int member_socket : groups[group_name]) {
+                            if (member_socket != client_socket) {
+                                send_message(member_socket, username + " has joined the group " + group_name + ".\n");
+                            }
+                        }
+                    }
                 } else {
                     send_message(client_socket, "Group " + group_name + " does not exist.\n");
                 }
+            } else {
+                send_message(client_socket, "Invalid syntax. Use: /join_group <group_name>\n");
             }
-        } 
+        }
         // Handle /leave_group command
         else if (message.starts_with("/leave_group")) {
-            size_t space = message.find(' ', 13);
+            size_t space = message.find(' ');
             if (space != std::string::npos) {
-                std::string group_name = message.substr(13);
+                std::string group_name = message.substr(space + 1);
+                group_name = group_name.substr(0, group_name.find_first_of("\r\n\0")); // Clean up group name
                 std::lock_guard<std::mutex> lock(groups_mutex);
                 if (groups.find(group_name) != groups.end()) {
-                    groups[group_name].erase(client_socket); // Remove client from group
-                    send_message(client_socket, "You left the group " + group_name + ".\n");
+                    if (groups[group_name].find(client_socket) == groups[group_name].end()) {
+                        send_message(client_socket, "You are not in group " + group_name + ".\n");
+                    } else {
+                        groups[group_name].erase(client_socket); // Remove client from group
+                        send_message(client_socket, "You left the group " + group_name + ".\n");
+                        // Notify other group members
+                        for (int member_socket : groups[group_name]) {
+                            send_message(member_socket, username + " has left the group " + group_name + ".\n");
+                        }
+                        // If group is empty, remove it
+                        if (groups[group_name].empty()) {
+                            groups.erase(group_name);
+                        }
+                    }
                 } else {
                     send_message(client_socket, "Group " + group_name + " does not exist.\n");
                 }
+            } else {
+                send_message(client_socket, "Invalid syntax. Use: /leave_group <group_name>\n");
             }
-        } 
+        }
         // Handle /group_msg command
         else if (message.starts_with("/group_msg")) {
             size_t space1 = message.find(' ');
@@ -183,17 +218,26 @@ void handle_client(int client_socket) {
             if (space1 != std::string::npos && space2 != std::string::npos) {
                 std::string group_name = message.substr(space1 + 1, space2 - space1 - 1);
                 std::string group_message = message.substr(space2 + 1);
+                group_name = group_name.substr(0, group_name.find_first_of("\r\n\0")); // Clean up group name
+                group_message = group_message.substr(0, group_message.find_first_of("\r\n\0")); // Clean up message
 
                 std::lock_guard<std::mutex> lock(groups_mutex);
                 if (groups.find(group_name) != groups.end()) {
-                    for (int socket : groups[group_name]) {
-                        if (socket != client_socket) { // Ensure message is not sent back to the sender
-                            send_message(socket, "[" + username + "][Group " + group_name + "]: " + group_message + "\n");
+                    if (groups[group_name].find(client_socket) == groups[group_name].end()) {
+                        send_message(client_socket, "You are not a member of group " + group_name + ".\n");
+                    } else {
+                        // Send to all group members including sender for consistency
+                        for (int socket : groups[group_name]) {
+                            if (socket != client_socket) { // Don't send back to sender
+                                send_message(socket, "[" + username + "][Group " + group_name + "]: " + group_message + "\n");
+                            }
                         }
                     }
                 } else {
                     send_message(client_socket, "Group " + group_name + " does not exist.\n");
                 }
+            } else {
+                send_message(client_socket, "Invalid syntax. Use: /group_msg <group_name> <message>\n");
             }
         } else {
             send_message(client_socket, "Unknown command.\n");
@@ -228,7 +272,7 @@ int main() {
 
     sockaddr_in server_address {};
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(1234);
+    server_address.sin_port = htons(12354);
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_socket, (sockaddr*)&server_address, sizeof(server_address)) < 0) {
@@ -241,7 +285,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "Server listening on port 1234...\n";
+    std::cout << "Server listening on port 12345...\n";
 
     // Accept and handle clients in separate threads
     while (true) {
