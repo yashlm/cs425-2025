@@ -289,9 +289,28 @@ bool authenticate_client(int client_socket, std::string & username) {
     {
         std::lock_guard<std::mutex> lock(clients_mutex);
         if (users.find(username) != users.end() && users[username] == password) {
-            send_message(client_socket, "Welcome to the chat server!\n");
+            // First add the client to our list
             clients[client_socket] = username;
             Logger::log_info("User " + username + " authenticated successfully.");
+            
+            // Send welcome message to the new client
+            send_message(client_socket, "Welcome to the chat server!\n");
+            
+            // Send the list of currently online users to the new client
+            if (clients.size() > 1) {  // If there are other users online
+                std::string online_users = "Currently online users: ";
+                for (const auto& [_, user] : clients) {
+                    if (user != username) {  // Don't include the new user
+                        online_users += user + ", ";
+                    }
+                }
+                // Remove the last comma and space
+                if (online_users.length() > 2) {
+                    online_users = online_users.substr(0, online_users.length() - 2);
+                }
+                send_message(client_socket, online_users + "\n");
+            }
+            
             // Notify other clients that a new user has joined
             for (const auto& [sock, user] : clients) {
                 if (sock != client_socket) {
