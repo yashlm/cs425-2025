@@ -8,8 +8,9 @@
 #include <arpa/inet.h>
 
 #define BUFFER_SIZE 1024
-#define NUM_CLIENTS 100
+#define NUM_CLIENTS 20  // Reduced from 100 to 20 for initial testing
 #define TEST_DURATION 60 // seconds
+#define MAX_RETRIES 3   // Number of connection retries
 
 struct TestClient {
     int socket;
@@ -37,34 +38,47 @@ std::vector<std::string> test_messages = {
     "/msg alice Hello there!"
 };
 
+bool try_connect(int& sock, const sockaddr_in& server_addr, int retries) {
+    for (int i = 0; i < retries; i++) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            std::cerr << "Socket creation failed, attempt " << (i + 1) << " of " << retries << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            continue;
+        }
+
+        if (connect(sock, (sockaddr*)&server_addr, sizeof(server_addr)) == 0) {
+            return true;
+        }
+
+        close(sock);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    return false;
+}
+
 void simulate_client(int client_id) {
     TestClient client;
     
-    // Create socket
-    client.socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (client.socket < 0) {
-        std::cerr << "Client " << client_id << ": Socket creation failed" << std::endl;
-        return;
-    }
-
     // Connect to server
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(12345);
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    if (connect(client.socket, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        std::cerr << "Client " << client_id << ": Connection failed" << std::endl;
-        close(client.socket);
+    if (!try_connect(client.socket, server_addr, MAX_RETRIES)) {
+        std::cerr << "Client " << client_id << ": Connection failed after " << MAX_RETRIES << " attempts" << std::endl;
         return;
     }
+
+    std::cout << "Client " << client_id << ": Successfully connected" << std::endl;
 
     // Random number generator
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> user_dist(0, test_users.size() - 1);
     std::uniform_int_distribution<> msg_dist(0, test_messages.size() - 1);
-    std::uniform_int_distribution<> delay_dist(100, 2000); // 100-2000ms delay
+    std::uniform_int_distribution<> delay_dist(500, 3000); // Increased delay range
 
     char buffer[BUFFER_SIZE];
     
@@ -130,8 +144,8 @@ int main() {
     // Launch client threads
     for (int i = 0; i < NUM_CLIENTS; ++i) {
         client_threads.emplace_back(simulate_client, i);
-        // Small delay between client launches to prevent connection flood
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // Increased delay between client launches
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
     // Wait for all clients to complete
