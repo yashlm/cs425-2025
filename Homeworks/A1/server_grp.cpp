@@ -95,7 +95,6 @@ void send_message(int client_socket, const std::string& message) {
 }
 
 // --- Command processing functions ---
-// (These functions remain largely the same as before)
 void processPrivateMessage(int client_socket, const std::string& message, const std::string& username) {
     size_t space1 = message.find(' ');
     size_t space2 = message.find(' ', space1 + 1);
@@ -263,7 +262,7 @@ void processGroupMessage(int client_socket, const std::string& message, const st
     }
 }
 
-// New helper function: handle client authentication
+// Handling client authentication
 bool authenticate_client(int client_socket, std::string & username) {
     char buffer[BUFFER_SIZE];
     // Prompt for username
