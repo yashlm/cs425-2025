@@ -279,6 +279,7 @@ A *stress test tool* (stress_test.cpp) was implemented to simulate *100 concurre
 | *Pushkar Aggarwal(220839)* | Server setup, authentication, threading | 33.33% |
 | *Yash Chauhan(221217)* | Messaging logic, group management, testing scripts, logging | 33.33% |
 | *Ansh Agarwal(220165)* | Debugging, stress testing, documentation, README | 33.33% |
+
 All members have eagerly took part in the assignment and done their best.
 
 ---
