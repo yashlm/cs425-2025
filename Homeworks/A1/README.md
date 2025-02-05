@@ -325,6 +325,7 @@ make        # Build server, client, and stress test
    ```bash
    ./stress_test
    ```
+#### The code was run and tested on WSL Ubuntu Enviornment (5.15.167.4-microsoft-standard-WSL2, Ubuntu 22.04.3 LTS).
 
 ---
 
