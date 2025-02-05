@@ -128,67 +128,68 @@ std::unordered_map<std::string, std::unordered_set<int>> groups;  // Group -> Me
 7. Cleanup on client disconnect
 
 ### *Code Flow Diagram*
-plaintext
- +---------------------+
- |     Start Server    |
- +---------------------+
-           |
-           v
- +---------------------+
- |    Load users.txt   |
- +---------------------+
-           |
-           v
- +---------------------+
- | Listen on port 12345 |
- +---------------------+
-           |
-           v
- +---------------------+
- |   Accept client     |
- +---------------------+
-           |
-           v
- +-------------------------------+
- | Create thread for each client |
- +-------------------------------+
-               |
-               v
- +----------------------------+
- |     Authenticate client    |
- +----------------------------+
-              |
-              v
- +----------------------------+
- |      Process messages      |
- +----------------------------+
-              |
-              v
- +--------------------------------------------------------------+
- |                       Message Type                           |
- +--------------------------------------------------------------+
-         /                    |                    \
-        v                     v                     v
-+----------------+  +------------------+  +-------------------+
-| Private Message | |   Group Message  |  | Broadcast Message |
-|     (/msg)      | |   (/group_msg)   |  |   (/broadcast)    |
-+----------------+  +------------------+  +-------------------+
-           |
-           v
- +---------------------+
- |     Log activity    |
- +---------------------+
-           |
-           v
- +---------------------+
- |  Client disconnects |
- +---------------------+
-           |
-           v
- +---------------------+
- |   Cleanup & remove  |
- +---------------------+
+```cpp
+                                    +---------------------+
+                                    |     Start Server    |
+                                    +---------------------+
+                                               |
+                                               v
+                                    +---------------------+
+                                    |    Load users.txt   |
+                                    +---------------------+
+                                               |
+                                               v
+                                    +----------------------+
+                                    | Listen on port 12345 |
+                                    +----------------------+
+                                               |
+                                               v
+                                    +---------------------+
+                                    |     Accept client   |
+                                    +---------------------+
+                                               |
+                                               v
+                              +-------------------------------------+
+                              |     Create thread for each client   |
+                              +-------------------------------------+
+                                               |
+                                               v
+                               +----------------------------------+
+                               |        Authenticate client       |
+                               +----------------------------------+
+                                               |
+                                               v
+                               +----------------------------------+
+                               |         Process messages         |
+                               +----------------------------------+
+                                               |
+                                               v
+                          +--------------------------------------------+
+                          |                 Message Type               |
+                          +--------------------------------------------+
+                            /                     |                        \
+                           v                      v                         v
+               +----------------+        +------------------+       +-------------------+
+               | Private Message |       |   Group Message  |       | Broadcast Message |
+               |     (/msg)      |       |   (/group_msg)   |       |   (/broadcast)    |
+               +----------------+        +------------------+       +-------------------+
+                                                   |
+                                                   v
+                                        +---------------------+
+                                        |     Log activity    |
+                                        +---------------------+
+                                                   |
+                                                   v
+                                        +---------------------+
+                                        |  Client disconnects |
+                                        +---------------------+
+                                                   |
+                                                   v
+                                        +---------------------+
+                                        |   Cleanup & remove  |
+                                        +---------------------+
 
+```
 
 ---
 
@@ -275,9 +276,10 @@ A *stress test tool* (stress_test.cpp) was implemented to simulate *100 concurre
 ## *Individual Contributions*
 | *Member* | *Contributions* | *Percentage* |
 |---------|--------------------|-------------|
-| *Member 1* | Server setup, authentication, threading |
-| *Member 2* | Messaging logic, group management |
-| *Member 3* | Debugging, stress testing, documentation, README, testing scripts |
+| *Pushkar Aggarwal(220839)* | Server setup, authentication, threading | 33.33% |
+| *Yash Chauhan(221217)* | Messaging logic, group management, testing scripts, logging | 33.33% |
+| *Ansh Agarwal(220165)* | Debugging, stress testing, documentation, README | 33.33% |
+All members have eagerly took part in the assignment and done their best.
 
 ---
 
@@ -285,10 +287,19 @@ A *stress test tool* (stress_test.cpp) was implemented to simulate *100 concurre
 - *Books*: "Computer Networking: A Top-Down Approach"
 - *Blogs*: Stack Overflow, GeeksforGeeks (Socket Programming)
 - *Websites*: Cplusplus.com, Beej’s Guide to Network Programming
+- *Course Stuff*: Lectures slides and the piazza for doubts. 
 
 ---
 
 ## *Declaration*
 We hereby declare that *this project is our original work*. We did not indulge in plagiarism, and any external resources used have been duly credited.
+
+---
+
+## *Feedback*
+### *Our Implemententation*
+✔ Efficient *multi-threaded* implementation.  
+✔ Proper *logging* and *error handling*.  
+✔ *Scalable design* supporting multiple clients.
 
 ---
