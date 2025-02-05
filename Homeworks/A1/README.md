@@ -30,10 +30,10 @@ Additionally, a *stress testing tool* is included to simulate *100 concurrent cl
   - Format: `/broadcast <message>`
   - Efficient delivery using client socket map
 - *Group Management*:
-  - *Create Group (/create_group <group_name>)*: Any user can create a new group
-  - *Join Group (/join_group <group_name>)*: Users can join existing groups
-  - *Leave Group (/leave_group <group_name>)*: Members can leave groups
-  - *Group Messages (/group_msg <group_name> <message>)*: Send to all group members
+  - *Create Group (`/create_group <group_name>`)*: Any user can create a new group
+  - *Join Group (`/join_group <group_name>`)*: Users can join existing groups
+  - *Leave Group (`/leave_group <group_name>`)*: Members can leave groups
+  - *Group Messages (`/group_msg <group_name> <message>`)*: Send to all group members
   - Groups are automatically cleaned up when empty
 - *Thread-Safe Logging*: 
   - Info and error level logging
@@ -91,41 +91,135 @@ Additionally, a *stress testing tool* is included to simulate *100 concurrent cl
 ---
 
 ## *Implementation Details*
-### *Key Data Structures*
+#### *Core Data Structures*
 ```cpp
-// Client management
+// Thread-safe client management
+std::mutex clients_mutex;
 std::unordered_map<int, std::string> clients;        // Socket -> Username
 std::unordered_map<std::string, std::string> users;  // Username -> Password
+
+// Thread-safe group management
+std::mutex groups_mutex;
 std::unordered_map<std::string, std::unordered_set<int>> groups;  // Group -> Member sockets
+
+// Thread-safe logging
+std::mutex log_mutex;
 ```
 
-### *Core Functions*
-- *Server Operations*:
-  - `main()`: Server initialization and client acceptance
-  - `handle_client()`: Per-client message processing
-  - `authenticate_client()`: User validation
-- *Message Processing*:
-  - `processClientMessage()`: Command routing
-  - `processPrivateMessage()`: Direct messages
-  - `processBroadcastMessage()`: All-user messages
-  - `processGroupMessage()`: Group communication
-- *Group Management*:
-  - `processCreateGroup()`: New group creation
-  - `processJoinGroup()`: Group membership
-  - `processLeaveGroup()`: Member removal
-- *Utility Functions*:
-  - `send_message()`: Reliable message delivery
-  - `split()`: Command parsing
-  - `load_users()`: Configuration loading
+#### *Key Design Patterns*
+1. *Thread-Per-Client Pattern*
+   - Each client connection runs in its own thread
+   - Allows concurrent handling of multiple clients
+   - Thread detachment for automatic cleanup
 
-### *Message Flow*
-1. Client connects and authenticates
-2. Server creates dedicated client thread
-3. Thread processes incoming messages
-4. Messages are routed based on command
-5. Responses sent to appropriate recipients
-6. Logging captures all operations
-7. Cleanup on client disconnect
+2. *Resource Protection Pattern*
+   - Mutex locks for shared resources
+   - RAII-style lock guards
+   - Prevents race conditions
+
+3. *Message Router Pattern*
+   - Command parsing and routing
+   - Dedicated handler functions
+   - Clean separation of concerns
+
+4. *Observer Pattern*
+   - Clients notified of user join/leave events
+   - Group members notified of messages
+   - Broadcast capabilities
+
+#### *Core Functions*
+
+1. *Server Operations*:
+   ```cpp
+   int main()                 // Server initialization, socket setup, client acceptance
+   void handle_client()       // Per-client message processing thread
+   bool authenticate_client() // User validation against users.txt
+   ```
+
+2. *Message Processing*:
+   ```cpp
+   void processClientMessage()    // Command parsing and routing
+   void processPrivateMessage()   // Direct user-to-user messages
+   void processBroadcastMessage() // Messages to all users
+   void processGroupMessage()     // Messages to group members
+   ```
+
+3. *Group Management*:
+   ```cpp
+   void processCreateGroup() // Create new group
+   void processJoinGroup()   // Add user to group
+   void processLeaveGroup()  // Remove user from group
+   ```
+
+4. *Thread-Safe Operations*:
+   ```cpp
+   void send_message()       // Reliable message delivery
+   std::vector<std::string> split() // Command parsing
+   void Logger::log_info()   // Thread-safe logging
+   void Logger::log_error()  // Error logging
+   ```
+
+#### *Error Handling*
+1. *Network Errors*
+   - Socket creation failures
+   - Connection drops
+   - Send/receive errors
+
+2. *Authentication Errors*
+   - Invalid credentials
+   - Duplicate logins
+   - File access issues
+
+3. *Message Errors*
+   - Invalid commands
+   - Missing recipients
+   - Group not found
+
+4. *Resource Errors*
+   - Memory allocation
+   - Thread creation
+   - Mutex deadlocks
+
+#### *Message Flow Details*
+
+1. *Connection Phase*
+   ```
+   Client -> Server: TCP Connection request
+   Server -> Client: Accept connection
+   Server: Create dedicated client thread
+   ```
+
+2. *Authentication Phase*
+   ```
+   Server -> Client: "Enter username:"
+   Client -> Server: username
+   Server -> Client: "Enter password:"
+   Client -> Server: password
+   Server: Validate credentials
+   Server -> Client: Welcome/Error message
+   ```
+
+3. *Message Processing Phase*
+   ```
+   Client -> Server: Command message
+   Server: Parse command
+   Server: Acquire necessary locks
+   Server: Process message
+   Server -> Recipients: Deliver message
+   Server: Release locks
+   Server: Log activity
+   ```
+
+4. *Disconnection Phase*
+   ```
+   Client: Connection closes
+   Server: Detect disconnection
+   Server: Remove from clients map
+   Server: Remove from all groups
+   Server: Notify other clients
+   Server: Clean up resources
+   Server: Log disconnection
+   ```
 
 ### *Code Flow Diagram*
 ```cpp
@@ -156,39 +250,57 @@ std::unordered_map<std::string, std::unordered_set<int>> groups;  // Group -> Me
                                                v
                                +----------------------------------+
                                |        Authenticate client       |
+                               |   1. Request username/password   |
+                               |   2. Validate against users.txt  |
+                               |   3. Add to clients map if OK    |
                                +----------------------------------+
                                                |
                                                v
                                +----------------------------------+
-                               |         Process messages         |
+                               |      Send Welcome Messages       |
+                               |   1. Welcome message to client   |
+                               |   2. Show online users list      |
+                               |   3. Notify others of new join   |
+                               +----------------------------------+
+                                               |
+                                               v
+                               +----------------------------------+
+                               |      Process Client Messages     |
+                               |   1. Receive client message      |
+                               |   2. Parse command & arguments   |
+                               |   3. Route to handler function   |
                                +----------------------------------+
                                                |
                                                v
                           +--------------------------------------------+
-                          |                 Message Type               |
+                          |              Message Handlers              |
                           +--------------------------------------------+
-                            /                     |                        \
-                           v                      v                         v
-               +----------------+        +------------------+       +-------------------+
-               | Private Message |       |   Group Message  |       | Broadcast Message |
-               |     (/msg)      |       |   (/group_msg)   |       |   (/broadcast)    |
-               +----------------+        +------------------+       +-------------------+
-                                                   |
-                                                   v
-                                        +---------------------+
-                                        |     Log activity    |
-                                        +---------------------+
-                                                   |
-                                                   v
-                                        +---------------------+
-                                        |  Client disconnects |
-                                        +---------------------+
-                                                   |
-                                                   v
-                                        +---------------------+
-                                        |   Cleanup & remove  |
-                                        +---------------------+
-
+                            /                   |                   \
+                           v                    v                    v
+               +-----------------+     +-------------------+    +-------------------+
+               | Private Message |     |   Group Message   |    | Broadcast Message |
+               |   1. Find user  |     | 1. Verify group   |    |  1. Send to all   |
+               |   2. Send msg   |     | 2. Check member   |    |  2. Log activity  |
+               |   3. Log event  |     | 3. Send to group  |    +-------------------+
+               +-----------------+     +-------------------+
+                                               |
+                                               v
+                                +--------------------------------+
+                                |        Thread-Safe Ops         |
+                                | 1. Mutex-protected access      |
+                                | 2. Lock guards for resources   |
+                                | 3. Safe message delivery       |
+                                +--------------------------------+
+                                               |
+                                               v
+                                +--------------------------------+
+                                |      Client Disconnection      |
+                                | 1. Close socket                |
+                                | 2. Remove from clients map     |
+                                | 3. Remove from groups          |
+                                | 4. Notify other clients        |
+                                | 5. Log disconnection          |
+                                +--------------------------------+
 ```
 
 ---
